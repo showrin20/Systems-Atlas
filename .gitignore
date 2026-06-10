@@ -1,0 +1,44 @@
+node_modules/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Editors/IDE
+.idea/
+.vscode/
+*.sublime-project
+
+# Caches / build tools
+.cache/
+.parcel-cache/
+.vite/
+.tmp/
+.astro/
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Generated files
+public/search-index.json
+search-index.json
+
+# Databases
+*.sqlite
+*.sqlite3
+
+# Lockfiles
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
