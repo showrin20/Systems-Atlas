@@ -1,0 +1,96 @@
+---
+import { dependentsOf, findTopic, type TopicWithSection } from '@data/curriculum';
+
+interface Heading {
+  depth: number;
+  slug: string;
+  text: string;
+}
+
+interface Props {
+  headings: Heading[];
+  topicSlug: string;
+  writtenSlugs: Set<string>;
+}
+
+const { headings, topicSlug, writtenSlugs } = Astro.props;
+const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
+
+// "Learn next" = topics that depend on this one (preferring written ones),
+// padded with unmet prerequisites of this topic if needed.
+const topic = findTopic(topicSlug);
+const next: { t: TopicWithSection; why: string }[] = [];
+
+for (const d of dependentsOf(topicSlug)) {
+  next.push({ t: d, why: `Builds directly on ${topic?.title ?? 'this topic'}` });
+}
+for (const depSlug of topic?.deps ?? []) {
+  const dep = findTopic(depSlug);
+  if (dep) next.push({ t: dep, why: 'Prerequisite — revisit if anything felt hazy' });
+}
+const nextWritten = next.filter((n) => writtenSlugs.has(n.t.slug)).slice(0, 3);
+const shown = nextWritten.length ? nextWritten : next.slice(0, 3);
+---
+
+<aside class="rail" aria-label="Page tools">
+  {
+    toc.length > 0 && (
+      <>
+        <h4>On this page</h4>
+        <ul class="toc-list" id="toc">
+          {toc.map((h) => (
+            <li>
+              <a href={`#${h.slug}`} class={`depth-${h.depth}`} data-target={h.slug}>
+                {h.text}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </>
+    )
+  }
+
+  {
+    shown.length > 0 && (
+      <>
+        <h4>You should learn next</h4>
+        {shown.map(({ t, why }) =>
+          writtenSlugs.has(t.slug) ? (
+            <a class="next-card" href={`/topics/${t.slug}`}>
+              <div class="next-title">{t.title}</div>
+              <div class="next-why">{why}</div>
+            </a>
+          ) : (
+            <div class="next-card" style="opacity:.55">
+              <div class="next-title">{t.title}</div>
+              <div class="next-why">{why} · coming soon</div>
+            </div>
+          )
+        )}
+      </>
+    )
+  }
+</aside>
+
+<script>
+  // Scroll-spy: highlight the TOC entry for the heading currently in view.
+  const links = [...document.querySelectorAll<HTMLAnchorElement>('#toc a')];
+  if (links.length) {
+    const map = new Map(links.map((l) => [l.dataset.target!, l]));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            links.forEach((l) => l.classList.remove('active'));
+            map.get(entry.target.id)?.classList.add('active');
+          }
+        }
+      },
+      { rootMargin: '-72px 0px -70% 0px' }
+    );
+    links.forEach((l) => {
+      const el = document.getElementById(l.dataset.target!);
+      if (el) observer.observe(el);
+    });
+  }
+</script>

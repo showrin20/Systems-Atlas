@@ -1,0 +1,40 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '@layouts/Base.astro';
+import Sidebar from '@components/Sidebar.astro';
+import GraphView from '@components/GraphView.astro';
+
+const entries = await getCollection('topics');
+const writtenSlugs = new Set(entries.map((e) => e.id));
+---
+
+<Base
+  title="Learning graph"
+  description="The full dependency graph of Systems Atlas: every topic, every prerequisite edge, from runtime basics to zero-trust architecture."
+  wide
+>
+  <Sidebar writtenSlugs={writtenSlugs} />
+
+  <main class="content">
+    <header class="topic-header">
+      <span class="eyebrow">Map</span>
+      <h1 class="topic-title">Learning graph</h1>
+      <p class="topic-lede">
+        Knowledge here is a DAG, not a list. A topic is only "ready to learn" when its
+        incoming edges are satisfied. Hover any node to see its full lineage — the columns
+        are computed from the longest prerequisite chain, so left-to-right is a valid study order.
+      </p>
+    </header>
+
+    <GraphView writtenSlugs={writtenSlugs} />
+
+    <div class="concept-card" style="max-width:680px">
+      <div class="cc-label">How to use this</div>
+      <p>
+        Pick a target on the right (say, <strong>Sagas &amp; Distributed Transactions</strong>),
+        hover it, and read the highlighted subgraph right-to-left. That set, in column order,
+        is your personal syllabus — everything else can wait.
+      </p>
+    </div>
+  </main>
+</Base>

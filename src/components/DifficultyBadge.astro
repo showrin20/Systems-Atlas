@@ -1,0 +1,10 @@
+---
+import { difficultyLabel, type Difficulty } from '@data/curriculum';
+
+interface Props {
+  level: Difficulty;
+}
+const { level } = Astro.props;
+---
+
+<span class={`badge badge-${level}`}>{difficultyLabel[level]}</span>

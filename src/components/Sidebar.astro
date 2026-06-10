@@ -1,0 +1,49 @@
+---
+import { sections } from '@data/curriculum';
+
+interface Props {
+  /** slugs that have written content */
+  writtenSlugs: Set<string>;
+  currentSlug?: string;
+}
+
+const { writtenSlugs, currentSlug } = Astro.props;
+---
+
+<nav class="sidebar" aria-label="Curriculum">
+  {
+    sections.map((section) => {
+      const containsCurrent = section.topics.some((t) => t.slug === currentSlug);
+      const open = containsCurrent || section.id === 'section-0';
+      return (
+        <details class="nav-section" open={open}>
+          <summary>
+            <span class="nav-code">{section.code}</span>
+            {section.title}
+            <svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 1.5 L7 5 L3 8.5" /></svg>
+          </summary>
+          <ul class="nav-topics">
+            {section.topics.map((topic) => {
+              const written = writtenSlugs.has(topic.slug);
+              return (
+                <li class="nav-topic" data-slug={topic.slug}>
+                  {written ? (
+                    <a href={`/topics/${topic.slug}`} aria-current={topic.slug === currentSlug ? 'page' : undefined}>
+                      <span class="nav-done" aria-hidden="true" />
+                      {topic.title}
+                    </a>
+                  ) : (
+                    <span class="nav-planned" title="Content not written yet">
+                      {topic.title}
+                      <span class="planned-tag">soon</span>
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </details>
+      );
+    })
+  }
+</nav>

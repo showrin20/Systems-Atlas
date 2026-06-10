@@ -1,0 +1,271 @@
+---
+import '@fontsource-variable/inter';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  /** hide the right rail grid column */
+  wide?: boolean;
+}
+
+const { title, description, wide = false } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} · Systems Atlas</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:title" content={`${title} · Systems Atlas`} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content={canonical} />
+    <meta name="theme-color" content="#0a0c10" />
+    <script is:inline>
+      // Apply persisted theme + mode before paint to avoid flashes.
+      (() => {
+        const theme = localStorage.getItem('atlas:theme');
+        if (theme === 'light') document.documentElement.dataset.theme = 'light';
+        document.addEventListener('DOMContentLoaded', () => {
+          document.body.dataset.mode = localStorage.getItem('atlas:mode') || 'learn';
+        });
+      })();
+    </script>
+  </head>
+  <body data-mode="learn">
+    <header class="site-header">
+      <button class="icon-btn menu-btn" id="menu-btn" aria-label="Toggle navigation">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+      </button>
+
+      <a class="logo" href="/">
+        <svg class="logo-mark" viewBox="0 0 22 22" aria-hidden="true">
+          <path d="M4 16 L11 4 L18 16" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="4" cy="16" r="2.4"/>
+          <circle cx="11" cy="4" r="2.4"/>
+          <circle cx="18" cy="16" r="2.4"/>
+        </svg>
+        Systems Atlas
+      </a>
+
+      <div class="header-spacer"></div>
+
+      <button class="search-btn" id="search-open" aria-label="Search topics">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6" cy="6" r="4.4"/><path d="M9.4 9.4 L13 13"/></svg>
+        <span class="label">Search topics</span>
+        <kbd>⌘K</kbd>
+      </button>
+
+      <div class="mode-toggle" role="group" aria-label="Reading mode">
+        <button id="mode-learn" aria-pressed="true">Learn</button>
+        <button id="mode-build" aria-pressed="false">Build</button>
+      </div>
+
+      <button class="icon-btn" id="theme-btn" aria-label="Toggle light and dark theme">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="3.4"/><path d="M8 1v1.8M8 13.2V15M1 8h1.8M13.2 8H15M3.05 3.05l1.27 1.27M11.68 11.68l1.27 1.27M3.05 12.95l1.27-1.27M11.68 4.32l1.27-1.27"/></svg>
+      </button>
+    </header>
+
+    <div class={`shell ${wide ? 'shell--wide' : ''}`}>
+      <slot />
+    </div>
+
+    <!-- Search modal -->
+    <div class="search-overlay" id="search-overlay" role="dialog" aria-modal="true" aria-label="Search">
+      <div class="search-panel">
+        <input id="search-input" type="text" placeholder="Search topics… (↑↓ to move, ↵ to open)" autocomplete="off" />
+        <div class="search-results" id="search-results">
+          <div class="search-empty">Type to search every topic.</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ---------- mode toggle (Learn / Build) ----------
+      const modeBtns = {
+        learn: document.getElementById('mode-learn')!,
+        build: document.getElementById('mode-build')!,
+      };
+      function setMode(mode: 'learn' | 'build') {
+        document.body.dataset.mode = mode;
+        localStorage.setItem('atlas:mode', mode);
+        modeBtns.learn.setAttribute('aria-pressed', String(mode === 'learn'));
+        modeBtns.build.setAttribute('aria-pressed', String(mode === 'build'));
+      }
+      modeBtns.learn.addEventListener('click', () => setMode('learn'));
+      modeBtns.build.addEventListener('click', () => setMode('build'));
+      setMode((localStorage.getItem('atlas:mode') as 'learn' | 'build') || 'learn');
+
+      // ---------- theme ----------
+      document.getElementById('theme-btn')!.addEventListener('click', () => {
+        const root = document.documentElement;
+        const light = root.dataset.theme === 'light';
+        if (light) {
+          delete root.dataset.theme;
+          localStorage.setItem('atlas:theme', 'dark');
+        } else {
+          root.dataset.theme = 'light';
+          localStorage.setItem('atlas:theme', 'light');
+        }
+      });
+
+      // ---------- mobile nav ----------
+      document.getElementById('menu-btn')!.addEventListener('click', () => {
+        document.body.classList.toggle('nav-open');
+      });
+
+      // ---------- progress (shared store) ----------
+      const DONE_KEY = 'atlas:done';
+      const getDone = (): string[] => JSON.parse(localStorage.getItem(DONE_KEY) || '[]');
+      const setDone = (slugs: string[]) => {
+        localStorage.setItem(DONE_KEY, JSON.stringify(slugs));
+        document.dispatchEvent(new CustomEvent('atlas:progress'));
+      };
+      (window as any).atlasProgress = {
+        get: getDone,
+        toggle(slug: string) {
+          const done = getDone();
+          const i = done.indexOf(slug);
+          i >= 0 ? done.splice(i, 1) : done.push(slug);
+          setDone(done);
+          return i < 0;
+        },
+        has: (slug: string) => getDone().includes(slug),
+      };
+
+      // mark done topics in the sidebar
+      function paintSidebarProgress() {
+        const done = getDone();
+        document.querySelectorAll<HTMLElement>('.nav-topic[data-slug]').forEach((li) => {
+          li.classList.toggle('is-done', done.includes(li.dataset.slug!));
+        });
+      }
+      document.addEventListener('atlas:progress', paintSidebarProgress);
+      paintSidebarProgress();
+
+      // ---------- bookmarks store ----------
+      const BM_KEY = 'atlas:bookmarks';
+      (window as any).atlasBookmarks = {
+        get: (): string[] => JSON.parse(localStorage.getItem(BM_KEY) || '[]'),
+        toggle(slug: string) {
+          const list = (window as any).atlasBookmarks.get();
+          const i = list.indexOf(slug);
+          i >= 0 ? list.splice(i, 1) : list.push(slug);
+          localStorage.setItem(BM_KEY, JSON.stringify(list));
+          return i < 0;
+        },
+      };
+
+      // ---------- search ----------
+      type SearchDoc = { slug: string; title: string; summary: string; section: string; difficulty: string; written: boolean };
+      let index: SearchDoc[] | null = null;
+      let selected = 0;
+
+      const overlay = document.getElementById('search-overlay')!;
+      const input = document.getElementById('search-input') as HTMLInputElement;
+      const results = document.getElementById('search-results')!;
+
+      async function openSearch() {
+        overlay.classList.add('open');
+        input.value = '';
+        renderResults([]);
+        input.focus();
+        if (!index) {
+          const res = await fetch('/search-index.json');
+          index = await res.json();
+        }
+      }
+      function closeSearch() {
+        overlay.classList.remove('open');
+      }
+
+      function renderResults(docs: SearchDoc[]) {
+        selected = 0;
+        if (!input.value.trim()) {
+          results.innerHTML = '<div class="search-empty">Type to search every topic.</div>';
+          return;
+        }
+        if (!docs.length) {
+          results.innerHTML = '<div class="search-empty">No topics match. Try a broader term.</div>';
+          return;
+        }
+        results.innerHTML = docs
+          .slice(0, 8)
+          .map(
+            (d, i) => `
+            <a href="${d.written ? `/topics/${d.slug}` : '#'}" class="${i === 0 ? 'selected' : ''}" data-i="${i}">
+              <div class="sr-title">${d.title}${d.written ? '' : ' <span style="color:var(--text-faint);font-size:11px">(planned)</span>'}</div>
+              <div class="sr-meta">${d.section} · ${d.difficulty} — ${d.summary}</div>
+            </a>`
+          )
+          .join('');
+      }
+
+      function search(q: string): SearchDoc[] {
+        if (!index) return [];
+        const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+        return index
+          .map((d) => {
+            const hay = `${d.title} ${d.summary} ${d.section}`.toLowerCase();
+            let score = 0;
+            for (const t of terms) {
+              if (!hay.includes(t)) return null;
+              score += d.title.toLowerCase().includes(t) ? 3 : 1;
+            }
+            return { d, score: score + (d.written ? 1 : 0) };
+          })
+          .filter((x): x is { d: SearchDoc; score: number } => !!x)
+          .sort((a, b) => b.score - a.score)
+          .map((x) => x.d);
+      }
+
+      input.addEventListener('input', () => renderResults(search(input.value)));
+      document.getElementById('search-open')!.addEventListener('click', openSearch);
+      overlay.addEventListener('click', (e) => e.target === overlay && closeSearch());
+
+      input.addEventListener('keydown', (e) => {
+        const links = [...results.querySelectorAll('a')];
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (!links.length) return;
+          selected = (selected + (e.key === 'ArrowDown' ? 1 : -1) + links.length) % links.length;
+          links.forEach((l, i) => l.classList.toggle('selected', i === selected));
+          links[selected].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter' && links[selected]) {
+          const href = links[selected].getAttribute('href');
+          if (href && href !== '#') location.href = href;
+        }
+      });
+
+      // ---------- keyboard navigation ----------
+      document.addEventListener('keydown', (e) => {
+        const typing = ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName);
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          overlay.classList.contains('open') ? closeSearch() : openSearch();
+          return;
+        }
+        if (e.key === 'Escape') return closeSearch();
+        if (typing) return;
+        if (e.key === '/') {
+          e.preventDefault();
+          openSearch();
+        } else if (e.key === '[') {
+          (document.querySelector('.pager a.prev') as HTMLAnchorElement)?.click();
+        } else if (e.key === ']') {
+          (document.querySelector('.pager a.next') as HTMLAnchorElement)?.click();
+        } else if (e.key.toLowerCase() === 'm') {
+          setMode(document.body.dataset.mode === 'learn' ? 'build' : 'learn');
+        }
+      });
+    </script>
+  </body>
+</html>

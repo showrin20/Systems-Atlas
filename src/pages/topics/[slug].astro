@@ -1,0 +1,136 @@
+---
+import { getCollection, render } from 'astro:content';
+import Base from '@layouts/Base.astro';
+import Sidebar from '@components/Sidebar.astro';
+import Toc from '@components/Toc.astro';
+import DifficultyBadge from '@components/DifficultyBadge.astro';
+import { allTopics, findTopic } from '@data/curriculum';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('topics');
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content, headings } = await render(entry);
+
+const meta = findTopic(entry.id);
+if (!meta) {
+  throw new Error(
+    `Topic "${entry.id}" has a markdown file but no entry in src/data/curriculum.ts. Add it there first.`
+  );
+}
+
+const writtenEntries = await getCollection('topics');
+const writtenSlugs = new Set(writtenEntries.map((e) => e.id));
+
+// prev/next across written topics, in curriculum order
+const writtenOrdered = allTopics.filter((t) => writtenSlugs.has(t.slug));
+const i = writtenOrdered.findIndex((t) => t.slug === entry.id);
+const prev = i > 0 ? writtenOrdered[i - 1] : null;
+const next = i < writtenOrdered.length - 1 ? writtenOrdered[i + 1] : null;
+
+const deps = meta.deps.map((d) => findTopic(d)).filter(Boolean);
+---
+
+<Base title={entry.data.title} description={entry.data.description}>
+  <Sidebar writtenSlugs={writtenSlugs} currentSlug={entry.id} />
+
+  <main class="content">
+    <div class="prose-wrap">
+      <header class="topic-header">
+        <span class="eyebrow">{meta.section.code} — {meta.section.title}</span>
+        <h1 class="topic-title">{entry.data.title}</h1>
+        <p class="topic-lede">{entry.data.description}</p>
+
+        <div class="meta-row">
+          <DifficultyBadge level={meta.difficulty} />
+          {entry.data.readingTime && (
+            <span style="font-size:12.5px;color:var(--text-faint);font-family:var(--font-mono)">
+              ~{entry.data.readingTime} min
+            </span>
+          )}
+          <div class="header-spacer"></div>
+          <div class="topic-actions">
+            <button class="progress-check" id="progress-btn" data-slug={entry.id} aria-pressed="false">
+              <span class="box">
+                <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="#0a0c10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5 L4 8 L8.5 2"/></svg>
+              </span>
+              <span class="pc-label">Mark complete</span>
+            </button>
+            <button class="icon-btn bookmark-btn" id="bookmark-btn" data-slug={entry.id} aria-pressed="false" aria-label="Bookmark this topic">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M4 2.5 h8 v11 l-4 -3 -4 3 z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        {deps.length > 0 && (
+          <div class="meta-row" style="font-size:13px;color:var(--text-dim)">
+            <span style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint)">After</span>
+            {deps.map((d, idx) => (
+              <>
+                {writtenSlugs.has(d!.slug)
+                  ? <a href={`/topics/${d!.slug}`}>{d!.title}</a>
+                  : <span>{d!.title}</span>}
+                {idx < deps.length - 1 && <span style="color:var(--text-faint)">·</span>}
+              </>
+            ))}
+          </div>
+        )}
+      </header>
+
+      <div class="build-banner" role="status">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9.5 2.5 L4 9 h3 L6.5 13.5 L12 7 H9 z" stroke-linejoin="round"/></svg>
+        Build mode — theory is hidden. Ship the tasks below, then flip back to Learn to check your mental model.
+      </div>
+
+      <article class="article">
+        <Content />
+      </article>
+
+      <nav class="pager" aria-label="Adjacent topics">
+        {prev && (
+          <a class="prev" href={`/topics/${prev.slug}`}>
+            <div class="dir">← Previous · [</div>
+            <div class="pg-title">{prev.title}</div>
+          </a>
+        )}
+        {next && (
+          <a class="next" href={`/topics/${next.slug}`}>
+            <div class="dir">Next · ] →</div>
+            <div class="pg-title">{next.title}</div>
+          </a>
+        )}
+      </nav>
+    </div>
+  </main>
+
+  <Toc headings={headings} topicSlug={entry.id} writtenSlugs={writtenSlugs} />
+
+  <script>
+    const progressBtn = document.getElementById('progress-btn')!;
+    const bookmarkBtn = document.getElementById('bookmark-btn')!;
+    const slug = (progressBtn as HTMLElement).dataset.slug!;
+
+    function paintProgress() {
+      const done = (window as any).atlasProgress.has(slug);
+      progressBtn.setAttribute('aria-pressed', String(done));
+      progressBtn.querySelector('.pc-label')!.textContent = done ? 'Completed' : 'Mark complete';
+    }
+    progressBtn.addEventListener('click', () => {
+      (window as any).atlasProgress.toggle(slug);
+      paintProgress();
+    });
+    paintProgress();
+
+    function paintBookmark() {
+      const on = (window as any).atlasBookmarks.get().includes(slug);
+      bookmarkBtn.setAttribute('aria-pressed', String(on));
+    }
+    bookmarkBtn.addEventListener('click', () => {
+      (window as any).atlasBookmarks.toggle(slug);
+      paintBookmark();
+    });
+    paintBookmark();
+  </script>
+</Base>

@@ -1,0 +1,139 @@
+---
+import { allTopics } from '@data/curriculum';
+
+interface Props {
+  writtenSlugs: Set<string>;
+}
+const { writtenSlugs } = Astro.props;
+
+/**
+ * Layered layout, computed at build time:
+ *   column (x) = longest dependency chain ending at the topic
+ *   row (y)    = order within the column
+ * Edges are cubic curves from a dependency's right edge to the dependent's left edge.
+ */
+const depthCache = new Map<string, number>();
+function depth(slug: string): number {
+  if (depthCache.has(slug)) return depthCache.get(slug)!;
+  const t = allTopics.find((x) => x.slug === slug);
+  const d = !t || t.deps.length === 0 ? 0 : 1 + Math.max(...t.deps.map(depth));
+  depthCache.set(slug, d);
+  return d;
+}
+
+const COL_W = 210;
+const ROW_H = 52;
+const NODE_W = 168;
+const NODE_H = 34;
+const PAD = 30;
+
+const columns = new Map<number, typeof allTopics>();
+for (const t of allTopics) {
+  const d = depth(t.slug);
+  if (!columns.has(d)) columns.set(d, []);
+  columns.get(d)!.push(t);
+}
+
+const pos = new Map<string, { x: number; y: number }>();
+const maxRows = Math.max(...[...columns.values()].map((c) => c.length));
+for (const [d, topics] of columns) {
+  const offset = ((maxRows - topics.length) * ROW_H) / 2;
+  topics.forEach((t, i) => {
+    pos.set(t.slug, { x: PAD + d * COL_W, y: PAD + offset + i * ROW_H });
+  });
+}
+
+const width = PAD * 2 + (columns.size - 1) * COL_W + NODE_W;
+const height = PAD * 2 + maxRows * ROW_H;
+
+const edges = allTopics.flatMap((t) =>
+  t.deps
+    .filter((dep) => pos.has(dep))
+    .map((dep) => {
+      const a = pos.get(dep)!;
+      const b = pos.get(t.slug)!;
+      const x1 = a.x + NODE_W;
+      const y1 = a.y + NODE_H / 2;
+      const x2 = b.x;
+      const y2 = b.y + NODE_H / 2;
+      const mid = (x1 + x2) / 2;
+      return {
+        from: dep,
+        to: t.slug,
+        d: `M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`,
+      };
+    })
+);
+
+const label = (s: string) => (s.length > 24 ? s.slice(0, 23) + '…' : s);
+---
+
+<div class="graph-wrap">
+  <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} id="learning-graph" role="img" aria-label="Dependency graph of all topics">
+    {edges.map((e) => <path class="gedge" d={e.d} data-from={e.from} data-to={e.to} />)}
+    {
+      allTopics.map((t) => {
+        const p = pos.get(t.slug)!;
+        const written = writtenSlugs.has(t.slug);
+        const node = (
+          <g
+            class={`gnode ${written ? 'written' : ''}`}
+            transform={`translate(${p.x}, ${p.y})`}
+            data-slug={t.slug}
+            data-deps={t.deps.join(',')}
+          >
+            <rect width={NODE_W} height={NODE_H} />
+            <circle cx="14" cy={NODE_H / 2} r="3" fill={`var(--d-${t.difficulty})`} />
+            <text x="26" y={NODE_H / 2 + 3.5}>{label(t.title)}</text>
+            <title>{t.title} — {t.summary}{t.deps.length ? ` (after: ${t.deps.join(', ')})` : ''}</title>
+          </g>
+        );
+        return written ? <a href={`/topics/${t.slug}`}>{node}</a> : node;
+      })
+    }
+  </svg>
+</div>
+
+<div class="graph-legend">
+  <span><span class="legend-dot written"></span> content available</span>
+  <span><span class="legend-dot"></span> planned</span>
+  <span><span style="width:8px;height:8px;border-radius:50%;background:var(--d-beginner)"></span> beginner</span>
+  <span><span style="width:8px;height:8px;border-radius:50%;background:var(--d-intermediate)"></span> intermediate</span>
+  <span><span style="width:8px;height:8px;border-radius:50%;background:var(--d-advanced)"></span> advanced</span>
+  <span style="color:var(--text-faint)">hover a topic to trace its lineage</span>
+</div>
+
+<script>
+  // Hovering a node highlights its full ancestry (everything you need first)
+  // and dims the rest of the graph.
+  const svg = document.getElementById('learning-graph');
+  if (svg) {
+    const nodes = [...svg.querySelectorAll<SVGGElement>('.gnode')];
+    const edges = [...svg.querySelectorAll<SVGPathElement>('.gedge')];
+    const depsOf = new Map(nodes.map((n) => [n.dataset.slug!, (n.dataset.deps || '').split(',').filter(Boolean)]));
+
+    function ancestry(slug: string, acc = new Set<string>()): Set<string> {
+      acc.add(slug);
+      for (const d of depsOf.get(slug) || []) if (!acc.has(d)) ancestry(d, acc);
+      return acc;
+    }
+
+    function clear() {
+      nodes.forEach((n) => n.classList.remove('dim'));
+      edges.forEach((e) => e.classList.remove('dim', 'hot'));
+    }
+
+    nodes.forEach((node) => {
+      node.addEventListener('mouseenter', () => {
+        const keep = ancestry(node.dataset.slug!);
+        nodes.forEach((n) => n.classList.toggle('dim', !keep.has(n.dataset.slug!)));
+        edges.forEach((e) => {
+          const inPath = keep.has(e.dataset.to!) && keep.has(e.dataset.from!);
+          e.classList.toggle('hot', inPath);
+          e.classList.toggle('dim', !inPath);
+        });
+      });
+      node.addEventListener('mouseleave', clear);
+    });
+  }
+</script>

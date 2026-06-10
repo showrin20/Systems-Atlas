@@ -1,0 +1,84 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '@layouts/Base.astro';
+import Sidebar from '@components/Sidebar.astro';
+import GraphView from '@components/GraphView.astro';
+import DifficultyBadge from '@components/DifficultyBadge.astro';
+import { sections } from '@data/curriculum';
+
+const entries = await getCollection('topics');
+const writtenSlugs = new Set(entries.map((e) => e.id));
+const totalTopics = sections.reduce((n, s) => n + s.topics.length, 0);
+---
+
+<Base
+  title="Think like a systems engineer"
+  description="A structured, dependency-aware learning system for advanced software engineering and modern architecture — mental models, real production examples, and build tasks."
+  wide
+>
+  <Sidebar writtenSlugs={writtenSlugs} />
+
+  <main class="content">
+    <section class="hero">
+      <span class="eyebrow">{totalTopics} topics · 11 tracks · one dependency graph</span>
+      <h1>
+        From knowing concepts<br />
+        to <span class="accent">thinking in systems</span>.
+      </h1>
+      <p>
+        Systems Atlas is not a blog. It's a dependency-ordered map of backend and
+        distributed-systems engineering. Every topic answers one question first:
+        <em>where is this used in a real production system?</em>
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="/topics/api-design">Start with API Design</a>
+        <a class="btn btn-ghost" href="/graph">Explore the learning graph</a>
+      </div>
+    </section>
+
+    <div class="home-section-head" style="border-top:none;padding-top:0">
+      <h2>The learning graph</h2>
+    </div>
+    <p style="color:var(--text-dim);max-width:620px;margin-top:8px">
+      Topics are nodes; prerequisites are edges. Hover any node to trace everything
+      it stands on. <strong>Concurrency</strong> rests on runtime basics;
+      <strong>Microservices</strong> rests on networking, API design, and strategic DDD —
+      the graph makes the order of learning explicit instead of implied.
+    </p>
+    <GraphView writtenSlugs={writtenSlugs} />
+
+    {
+      sections.map((section) => (
+        <>
+          <div class="home-section-head">
+            <span class="eyebrow">{section.code}</span>
+            <h2>{section.title}</h2>
+            <span class="count">{section.topics.filter((t) => writtenSlugs.has(t.slug)).length}/{section.topics.length} written</span>
+          </div>
+          <p style="color:var(--text-dim);margin:6px 0 0;max-width:620px">{section.intro}</p>
+          <div class="section-grid">
+            {section.topics.map((topic) =>
+              writtenSlugs.has(topic.slug) ? (
+                <a class="topic-card" href={`/topics/${topic.slug}`}>
+                  <div class="tc-top">
+                    <span class="tc-title">{topic.title}</span>
+                    <DifficultyBadge level={topic.difficulty} />
+                  </div>
+                  <span class="tc-summary">{topic.summary}</span>
+                </a>
+              ) : (
+                <div class="topic-card is-planned">
+                  <div class="tc-top">
+                    <span class="tc-title">{topic.title}</span>
+                    <span class="tc-planned">planned</span>
+                  </div>
+                  <span class="tc-summary">{topic.summary}</span>
+                </div>
+              )
+            )}
+          </div>
+        </>
+      ))
+    }
+  </main>
+</Base>

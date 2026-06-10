@@ -1,0 +1,16 @@
+{
+  "name": "systems-atlas",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "A static learning system for advanced software engineering and modern architecture.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.1.0",
+    "@fontsource/jetbrains-mono": "^5.1.0",
+    "astro": "^5.1.0"
+  }
+}
